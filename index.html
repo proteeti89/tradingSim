@@ -140,6 +140,39 @@
     ::-webkit-scrollbar { width:4px; height:4px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:#1e2040; border-radius:2px; }
+    /* ── STRATEGIES TAB ── */
+    .strat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+    .strat-explain-card { background:#0a0a14; border:1px solid #1a1a2e; border-radius:10px; padding:18px; position:relative; overflow:hidden; }
+    .strat-explain-card::before { content:''; position:absolute; top:0;left:0;right:0;height:3px; }
+    .strat-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+    .strat-card-name { font-size:14px; font-weight:700; color:#f1f5f9; }
+    .strat-card-badge { font-size:10px; padding:3px 8px; background:#1a1a2e; border-radius:4px; color:#64748b; white-space:nowrap; }
+    .strat-tagline { font-size:11px; color:#64748b; margin-bottom:10px; font-style:italic; }
+    .strat-desc { font-size:12px; color:#475569; line-height:1.7; margin-bottom:14px; }
+    .strat-params-title { font-size:10px; color:#334155; text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
+    .param-row { margin-bottom:12px; }
+    .param-row-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+    .param-label { font-size:11px; color:#94a3b8; }
+    .param-val { font-size:12px; font-weight:700; color:#f1f5f9; min-width:28px; text-align:right; }
+    .param-slider { width:100%; -webkit-appearance:none; appearance:none; height:4px; border-radius:2px; background:#1a1a2e; outline:none; cursor:pointer; }
+    .param-slider::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; cursor:pointer; }
+    .param-hint { font-size:10px; color:#334155; margin-top:3px; }
+    .param-actions { display:flex; gap:8px; margin-top:14px; }
+    .btn-apply  { flex:1; background:#3b82f6; color:#fff; border:none; border-radius:6px; padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .btn-apply:hover { background:#2563eb; }
+    .btn-defaults { background:#0f0f1e; color:#475569; border:1px solid #1e2040; border-radius:6px; padding:8px 12px; font-size:12px; cursor:pointer; font-family:inherit; }
+    .btn-defaults:hover { color:#94a3b8; border-color:#334155; }
+    /* ── PERFORMANCE TAB ── */
+    .perf-header { font-size:10px; color:#334155; text-transform:uppercase; letter-spacing:.06em; margin-bottom:14px; }
+    .perf-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:16px; }
+    .perf-card { background:#0a0a14; border-radius:8px; padding:14px 16px; border-left:3px solid; }
+    .perf-card-name { font-size:11px; color:#64748b; margin-bottom:8px; font-weight:600; }
+    .perf-stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .perf-stat { }
+    .perf-stat-label { font-size:10px; color:#334155; margin-bottom:2px; }
+    .perf-stat-val { font-size:13px; font-weight:700; color:#f1f5f9; }
+    .perf-trade-row { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:8px; padding-top:8px; border-top:1px solid #1a1a2e; }
+    .perf-empty { color:#334155; font-size:12px; font-style:italic; padding:8px 0; }
   </style>
 </head>
 <body>
@@ -166,10 +199,52 @@ const DATA_API         = 'https://data.alpaca.markets';
 const BROKER_API       = 'https://paper-api.alpaca.markets';
 
 const STRATEGIES = [
-  { id:'sma',  name:'SMA Crossover',   color:'#3b82f6', shortP:9,  longP:21 },
-  { id:'rsi',  name:'RSI Strategy',    color:'#10b981', period:14, lo:30, hi:70 },
-  { id:'macd', name:'MACD',            color:'#f59e0b', fast:12, slow:26, sig:9 },
-  { id:'bb',   name:'Bollinger Bands', color:'#ec4899', period:20, mult:2 },
+  {
+    id:'sma', name:'SMA Crossover', color:'#3b82f6',
+    defaultParams: { shortP:9, longP:21 },
+    tagline: 'Trend-following via moving average crossover',
+    description: 'Buys when the fast moving average crosses above the slow one — a "golden cross" signalling upward momentum. Sells on the reverse "death cross". Because MAs are computed over past prices, the signals lag slightly behind price action. Works best when markets are trending clearly in one direction; tends to whipsaw in choppy, sideways conditions.',
+    bestFor: 'Trending markets',
+    paramDefs: [
+      { key:'shortP', label:'Fast Period',  min:3,  max:50,  step:1,   hint:'Number of bars for the fast (short) moving average' },
+      { key:'longP',  label:'Slow Period',  min:10, max:200, step:1,   hint:'Number of bars for the slow (long) moving average — must be > Fast Period' },
+    ]
+  },
+  {
+    id:'rsi', name:'RSI Strategy', color:'#10b981',
+    defaultParams: { period:14, lo:30, hi:70 },
+    tagline: 'Mean-reversion based on momentum exhaustion',
+    description: 'The RSI is a 0–100 oscillator measuring the speed and magnitude of recent price changes. Readings below 30 suggest a stock has been oversold and may bounce — that\'s the buy signal. Readings above 70 suggest overbought conditions — that\'s the sell signal. Works best in ranging, sideways markets; in strong trends, RSI can stay "overbought" for extended periods.',
+    bestFor: 'Ranging / sideways markets',
+    paramDefs: [
+      { key:'period', label:'RSI Period',       min:5,  max:50, step:1, hint:'Lookback window used to calculate RSI' },
+      { key:'lo',     label:'Oversold Level',   min:10, max:40, step:1, hint:'RSI below this → BUY signal (lower = fewer, stronger signals)' },
+      { key:'hi',     label:'Overbought Level', min:60, max:90, step:1, hint:'RSI above this → SELL signal (higher = fewer, stronger signals)' },
+    ]
+  },
+  {
+    id:'macd', name:'MACD', color:'#f59e0b',
+    defaultParams: { fast:12, slow:26, sig:9 },
+    tagline: 'Momentum via moving average convergence/divergence',
+    description: 'The MACD line is the difference between a fast EMA and a slow EMA. The signal line is an EMA of the MACD line. A buy fires when the histogram (MACD minus signal) crosses from negative to positive — momentum is building upward. Sell when it crosses back negative. Versatile: works in both trending and transitional markets, and is one of the most widely used indicators.',
+    bestFor: 'Trending & transitional markets',
+    paramDefs: [
+      { key:'fast', label:'Fast EMA',    min:3,  max:30, step:1, hint:'Period for the fast exponential moving average' },
+      { key:'slow', label:'Slow EMA',    min:10, max:50, step:1, hint:'Period for the slow EMA — must be > Fast EMA' },
+      { key:'sig',  label:'Signal Line', min:3,  max:20, step:1, hint:'EMA of the MACD line used to generate crossover signals' },
+    ]
+  },
+  {
+    id:'bb', name:'Bollinger Bands', color:'#ec4899',
+    defaultParams: { period:20, mult:2 },
+    tagline: 'Volatility-based mean reversion',
+    description: 'Plots bands at ±N standard deviations around a moving average. Statistically, prices stay within ±2 std dev ~95% of the time. Buys when price crosses below the lower band (unusually cheap vs. recent range), sells when it crosses above the upper band. Naturally adapts to volatility — bands widen in volatile conditions and tighten in calm ones. Can produce false signals during strong breakouts.',
+    bestFor: 'Ranging markets with defined volatility',
+    paramDefs: [
+      { key:'period', label:'MA Period',            min:5, max:50, step:1,   hint:'Moving average lookback for the middle band' },
+      { key:'mult',   label:'Std Dev Multiplier',   min:1, max:4,  step:0.5, hint:'Band width — 1=68%, 2=95%, 3=99.7% of prices contained' },
+    ]
+  },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -198,18 +273,17 @@ function rsi(arr, n = 14) {
   return 100 - 100 / (1 + avgG / avgL);
 }
 
-function macdIndicator(arr) {
-  if (arr.length < 35) return null;
-  // Build MACD line history for signal EMA
+function macdIndicator(arr, fast=12, slow=26, sig=9) {
+  if (arr.length < slow + sig) return null;
   const hist = [];
-  for (let i = 26; i <= arr.length; i++) {
-    const f = ema(arr.slice(0, i), 12);
-    const s = ema(arr.slice(0, i), 26);
+  for (let i = slow; i <= arr.length; i++) {
+    const f = ema(arr.slice(0, i), fast);
+    const s = ema(arr.slice(0, i), slow);
     if (f != null && s != null) hist.push(f - s);
   }
-  if (hist.length < 9) return null;
+  if (hist.length < sig) return null;
   const macdNow = hist[hist.length - 1];
-  const sigNow  = ema(hist, 9);
+  const sigNow  = ema(hist, sig);
   return { macd: macdNow, signal: sigNow, histo: macdNow - sigNow };
 }
 
@@ -238,24 +312,24 @@ function getSignal(strategy, closes) {
       return null;
     }
     case 'rsi': {
-      const rNow  = rsi(closes);
-      const rPrev = rsi(prev);
+      const rNow  = rsi(closes, strategy.period ?? 14);
+      const rPrev = rsi(prev,   strategy.period ?? 14);
       if (rNow == null || rPrev == null) return null;
-      if (rPrev >= strategy.lo && rNow < strategy.lo) return 'BUY';   // drops into oversold
-      if (rPrev <= strategy.hi && rNow > strategy.hi) return 'SELL';  // rises into overbought
+      if (rPrev >= strategy.lo && rNow < strategy.lo) return 'BUY';
+      if (rPrev <= strategy.hi && rNow > strategy.hi) return 'SELL';
       return null;
     }
     case 'macd': {
-      const mNow  = macdIndicator(closes);
-      const mPrev = macdIndicator(prev);
+      const mNow  = macdIndicator(closes, strategy.fast ?? 12, strategy.slow ?? 26, strategy.sig ?? 9);
+      const mPrev = macdIndicator(prev,   strategy.fast ?? 12, strategy.slow ?? 26, strategy.sig ?? 9);
       if (!mNow || !mPrev) return null;
       if (mPrev.histo < 0 && mNow.histo >= 0) return 'BUY';
       if (mPrev.histo > 0 && mNow.histo <= 0) return 'SELL';
       return null;
     }
     case 'bb': {
-      const bbNow  = bollingerBands(closes);
-      const bbPrev = bollingerBands(prev);
+      const bbNow  = bollingerBands(closes, strategy.period ?? 20, strategy.mult ?? 2);
+      const bbPrev = bollingerBands(prev, strategy.period ?? 20, strategy.mult ?? 2);
       if (!bbNow || !bbPrev) return null;
       const cur = closes[closes.length - 1];
       const prv = closes[closes.length - 2];
@@ -316,6 +390,26 @@ function executeTrade(portfolio, symbol, signal, price, totalVal) {
   }
 
   return null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PERFORMANCE STATS
+// ──────────────────────────────────────────────────────────────────────────────
+function calcPerformance(portfolio) {
+  const sells = portfolio.trades.filter(t => t.action === 'SELL');
+  if (sells.length === 0) return null;
+  const wins   = sells.filter(t => t.pnl > 0);
+  const losses = sells.filter(t => t.pnl < 0);
+  const winRate     = wins.length / sells.length;
+  const avgGain     = wins.length   ? wins.reduce((s, t)   => s + t.pnl, 0) / wins.length   : 0;
+  const avgLoss     = losses.length ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
+  const grossGain   = wins.reduce((s, t) => s + t.pnl, 0);
+  const grossLoss   = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
+  const profitFactor = grossLoss > 0 ? grossGain / grossLoss : grossGain > 0 ? 9.99 : 0;
+  const best  = sells.reduce((m, t) => t.pnl > m.pnl ? t : m, sells[0]);
+  const worst = sells.reduce((m, t) => t.pnl < m.pnl ? t : m, sells[0]);
+  return { winRate, totalTrades: sells.length, wins: wins.length, losses: losses.length,
+           avgGain, avgLoss, profitFactor, grossGain, grossLoss, best, worst };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -650,6 +744,200 @@ function StrategyCard({ strategy, portfolio, prices, paused, onPause, onReset })
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// STRATEGIES TAB
+// ──────────────────────────────────────────────────────────────────────────────
+function StrategiesTab({ params, setParams, setPortfolios, portfolios, addLog }) {
+  // local draft params — only committed when user hits Apply
+  const [draft, setDraft] = React.useState(params.map(p => ({ ...p })));
+
+  const updateDraft = (i, key, value) => {
+    setDraft(prev => {
+      const next = prev.map(p => ({ ...p }));
+      next[i][key] = Number(value);
+      return next;
+    });
+  };
+
+  const applyParams = (i) => {
+    setParams(prev => { const n = [...prev]; n[i] = { ...draft[i] }; return n; });
+    setPortfolios(prev => { const n = [...prev]; n[i] = initPortfolio(); return n; });
+    addLog(`[${STRATEGIES[i].name}]  Parameters updated & portfolio reset`);
+  };
+
+  const resetDefaults = (i) => {
+    const def = { ...STRATEGIES[i].defaultParams };
+    setDraft(prev => { const n = [...prev]; n[i] = def; return n; });
+    setParams(prev => { const n = [...prev]; n[i] = def; return n; });
+    setPortfolios(prev => { const n = [...prev]; n[i] = initPortfolio(); return n; });
+    addLog(`[${STRATEGIES[i].name}]  Reset to default parameters`);
+  };
+
+  const isDirty = (i) => {
+    return JSON.stringify(draft[i]) !== JSON.stringify(params[i]);
+  };
+
+  return (
+    <div className="strat-grid">
+      {STRATEGIES.map((s, i) => (
+        <div key={s.id} className="strat-explain-card" style={{'--accent': s.color}}>
+          <style>{`.strat-explain-card:nth-child(${i+1})::before { background:${s.color}; }`}</style>
+          <div className="strat-card-header">
+            <div className="strat-card-name" style={{ color: s.color }}>{s.name}</div>
+            <div className="strat-card-badge">Best for: {s.bestFor}</div>
+          </div>
+          <div className="strat-tagline">{s.tagline}</div>
+          <div className="strat-desc">{s.description}</div>
+
+          <div className="strat-params-title">⚙ Parameters — tune &amp; apply</div>
+          {s.paramDefs.map(pd => (
+            <div key={pd.key} className="param-row">
+              <div className="param-row-header">
+                <span className="param-label">{pd.label}</span>
+                <span className="param-val" style={{ color: s.color }}>{draft[i][pd.key]}</span>
+              </div>
+              <input
+                type="range"
+                className="param-slider"
+                min={pd.min} max={pd.max} step={pd.step}
+                value={draft[i][pd.key]}
+                onChange={e => updateDraft(i, pd.key, e.target.value)}
+                style={{ accentColor: s.color }}
+              />
+              <div className="param-hint">{pd.hint}</div>
+            </div>
+          ))}
+
+          <div className="param-actions">
+            <button className="btn-apply" onClick={() => applyParams(i)}
+              style={{ background: isDirty(i) ? s.color : '#1a1a2e', color: isDirty(i) ? '#fff' : '#475569' }}>
+              {isDirty(i) ? '✓ Apply & Reset Portfolio' : '✓ Applied'}
+            </button>
+            <button className="btn-defaults" onClick={() => resetDefaults(i)}>↺ Defaults</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PERFORMANCE TAB
+// ──────────────────────────────────────────────────────────────────────────────
+function PerformanceTab({ portfolios, prices }) {
+  const fmt   = (n, dec=2) => n >= 0 ? `+$${n.toFixed(dec)}` : `-$${Math.abs(n).toFixed(dec)}`;
+  const fmtPf = (n) => n >= 9.99 ? '∞' : n.toFixed(2);
+
+  return (
+    <div>
+      <div className="perf-header">Closed-trade performance — updates after each SELL</div>
+      <div className="perf-grid">
+        {STRATEGIES.map((s, i) => {
+          const perf = calcPerformance(portfolios[i]);
+          const val  = portfolioValue(portfolios[i], prices);
+          const pnl  = val - STARTING_CAPITAL;
+          return (
+            <div key={s.id} className="perf-card" style={{ borderLeftColor: s.color }}>
+              <div className="perf-card-name" style={{ color: s.color }}>{s.name}</div>
+              {perf ? (
+                <>
+                  <div className="perf-stats-row">
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">Win Rate</div>
+                      <div className="perf-stat-val" style={{ color: perf.winRate >= .5 ? '#10b981' : '#ef4444' }}>
+                        {(perf.winRate * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">Trades</div>
+                      <div className="perf-stat-val">{perf.totalTrades}</div>
+                    </div>
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">Profit Factor</div>
+                      <div className="perf-stat-val" style={{ color: perf.profitFactor >= 1 ? '#10b981' : '#ef4444' }}>
+                        {fmtPf(perf.profitFactor)}
+                      </div>
+                    </div>
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">Avg Win</div>
+                      <div className="perf-stat-val pos">{perf.avgGain > 0 ? `+$${perf.avgGain.toFixed(0)}` : '—'}</div>
+                    </div>
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">Avg Loss</div>
+                      <div className="perf-stat-val neg">{perf.avgLoss < 0 ? `-$${Math.abs(perf.avgLoss).toFixed(0)}` : '—'}</div>
+                    </div>
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">Portfolio P&amp;L</div>
+                      <div className={`perf-stat-val ${pnl >= 0 ? 'pos' : 'neg'}`}>{pnl >= 0 ? '+' : ''}{((pnl/STARTING_CAPITAL)*100).toFixed(2)}%</div>
+                    </div>
+                  </div>
+                  <div className="perf-trade-row">
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">🏆 Best Trade</div>
+                      <div className="perf-stat-val pos" style={{ fontSize:11 }}>
+                        {perf.best.symbol} {fmt(perf.best.pnl, 0)}
+                      </div>
+                    </div>
+                    <div className="perf-stat">
+                      <div className="perf-stat-label">💀 Worst Trade</div>
+                      <div className="perf-stat-val neg" style={{ fontSize:11 }}>
+                        {perf.worst.symbol} {fmt(perf.worst.pnl, 0)}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="perf-empty">No closed trades yet — stats appear after first SELL</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Head-to-head comparison table */}
+      <div style={{ marginTop:4 }}>
+        <div className="perf-header" style={{ marginBottom:10 }}>Head-to-head comparison</div>
+        <div className="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Strategy</th>
+                <th>Portfolio Value</th>
+                <th>P&amp;L</th>
+                <th>Win Rate</th>
+                <th>Trades</th>
+                <th>Profit Factor</th>
+                <th>Avg Win</th>
+                <th>Avg Loss</th>
+              </tr>
+            </thead>
+            <tbody>
+              {STRATEGIES.map((s, i) => {
+                const perf = calcPerformance(portfolios[i]);
+                const val  = portfolioValue(portfolios[i], prices);
+                const pnl  = val - STARTING_CAPITAL;
+                const pct  = (pnl / STARTING_CAPITAL) * 100;
+                return (
+                  <tr key={s.id}>
+                    <td><span style={{ color: s.color, fontWeight:600 }}>{s.name}</span></td>
+                    <td>${val.toLocaleString('en-US', { maximumFractionDigits:0 })}</td>
+                    <td className={pnl >= 0 ? 'pos' : 'neg'}>{pnl >= 0 ? '+' : ''}{pct.toFixed(2)}%</td>
+                    <td>{perf ? `${(perf.winRate*100).toFixed(0)}% (${perf.wins}W/${perf.losses}L)` : '—'}</td>
+                    <td>{perf ? perf.totalTrades : '—'}</td>
+                    <td>{perf ? fmtPf(perf.profitFactor) : '—'}</td>
+                    <td className="pos">{perf && perf.avgGain > 0 ? `+$${perf.avgGain.toFixed(0)}` : '—'}</td>
+                    <td className="neg">{perf && perf.avgLoss < 0 ? `-$${Math.abs(perf.avgLoss).toFixed(0)}` : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // DASHBOARD
 // ──────────────────────────────────────────────────────────────────────────────
 function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
@@ -657,6 +945,7 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
   const [prices,     setPrices]     = useState({});
   const [portfolios, setPortfolios] = useState(STRATEGIES.map(() => initPortfolio()));
   const [paused,     setPaused]     = useState(STRATEGIES.map(() => false));
+  const [params,     setParams]     = useState(STRATEGIES.map(s => ({ ...s.defaultParams })));
   const [marketOpen, setMarketOpen] = useState(initClock?.is_open ?? false);
   const [tab,        setTab]        = useState('overview');
   const [status,     setStatus]     = useState('Initializing…');
@@ -670,10 +959,12 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
   const barsRef       = useRef({});
   const portfoliosRef = useRef(portfolios);
   const pausedRef     = useRef(paused);
+  const paramsRef     = useRef(params);
 
   useEffect(() => { portfoliosRef.current = portfolios; }, [portfolios]);
   useEffect(() => { pausedRef.current     = paused;     }, [paused]);
   useEffect(() => { pricesRef.current     = prices;     }, [prices]);
+  useEffect(() => { paramsRef.current     = params;     }, [params]);
 
   const addLog = useCallback(msg => {
     const line = `${new Date().toLocaleTimeString()}  ${msg}`;
@@ -693,11 +984,12 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
       if (currentPaused[i]) return port;
 
       // scan every symbol
+      const stratWithParams = { ...strategy, ...(paramsRef.current[i] ?? strategy.defaultParams) };
       for (const sym of WATCHLIST) {
         const symBars = currentBars[sym];
         if (!symBars || symBars.length < 40) continue;
         const closes  = symBars.map(b => parseFloat(b.c));
-        const signal  = getSignal(strategy, closes);
+        const signal  = getSignal(stratWithParams, closes);
         if (!signal) continue;
         const price   = currentPrices[sym] ?? closes[closes.length - 1];
         const result  = executeTrade(port, sym, signal, price, totalVal);
@@ -860,10 +1152,12 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
         <div className="panel">
           <div className="tab-row">
             {[
-              { id:'overview',   label:'📊  Overview'    },
-              { id:'positions',  label:'💼  Positions'   },
-              { id:'trades',     label:'📝  Trade Log'   },
-              { id:'log',        label:'🔍  Activity Log' },
+              { id:'overview',     label:'📊  Overview'    },
+              { id:'positions',    label:'💼  Positions'   },
+              { id:'trades',       label:'📝  Trade Log'   },
+              { id:'performance',  label:'🏆  Performance' },
+              { id:'strategies',   label:'📚  Strategies'  },
+              { id:'log',          label:'🔍  Activity Log' },
             ].map(t => (
               <div key={t.id} className={`tab-btn ${tab===t.id?'active':''}`} onClick={() => setTab(t.id)}>
                 {t.label}
@@ -900,6 +1194,20 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
 
           {/* TRADE LOG TAB */}
           {tab === 'trades' && <TradeLog portfolios={portfolios} />}
+
+          {/* PERFORMANCE TAB */}
+          {tab === 'performance' && <PerformanceTab portfolios={portfolios} prices={prices} />}
+
+          {/* STRATEGIES TAB */}
+          {tab === 'strategies' && (
+            <StrategiesTab
+              params={params}
+              setParams={setParams}
+              setPortfolios={setPortfolios}
+              portfolios={portfolios}
+              addLog={addLog}
+            />
+          )}
 
           {/* ACTIVITY LOG TAB */}
           {tab === 'log' && (
