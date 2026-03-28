@@ -136,10 +136,52 @@
     .spinner { width:32px; height:32px; border:3px solid #1a1a2e; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
     .loading-msg { color:#64748b; font-size:13px; }
+    /* ── WATCHLIST EDITOR ── */
+    .wl-editor { }
+    .wl-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .wl-title { font-size:11px; color:#475569; text-transform:uppercase; letter-spacing:.06em; }
+    .wl-add-row { display:flex; gap:8px; margin-bottom:14px; }
+    .wl-input { flex:1; background:#0a0a14; border:1px solid #1e2040; border-radius:6px; padding:8px 12px; color:#e2e8f0; font-family:inherit; font-size:12px; outline:none; }
+    .wl-input:focus { border-color:#3b82f6; }
+    .btn-wl-add { background:#3b82f6; color:#fff; border:none; border-radius:6px; padding:8px 14px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .btn-wl-add:hover { background:#2563eb; }
+    .wl-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .wl-chip { display:flex; align-items:center; gap:5px; background:#0f0f1e; border:1px solid #1a1a2e; border-radius:5px; padding:4px 10px; font-size:11px; color:#94a3b8; }
+    .wl-chip-remove { background:none; border:none; color:#334155; cursor:pointer; font-size:13px; line-height:1; padding:0; }
+    .wl-chip-remove:hover { color:#ef4444; }
+    .wl-reset { background:none; border:none; color:#334155; font-size:11px; cursor:pointer; font-family:inherit; text-decoration:underline; }
+    .wl-reset:hover { color:#94a3b8; }
+    /* ── SIGNAL TIMELINE ── */
+    .signal-tl { }
+    .signal-filters { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+    .signal-filter-btn { padding:4px 12px; border-radius:5px; font-size:11px; border:1px solid #1a1a2e; background:#0a0a14; color:#475569; cursor:pointer; font-family:inherit; transition:all .15s; }
+    .signal-filter-btn.active { background:#1a1a2e; color:#e2e8f0; }
+    .signal-empty { color:#334155; text-align:center; padding:36px; font-size:12px; }
+    .signal-dot-buy  { display:inline-block; width:7px; height:7px; border-radius:50%; background:#10b981; margin-right:5px; }
+    .signal-dot-sell { display:inline-block; width:7px; height:7px; border-radius:50%; background:#ef4444; margin-right:5px; }
     /* ── SCROLLBAR ── */
     ::-webkit-scrollbar { width:4px; height:4px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:#1e2040; border-radius:2px; }
+    /* ── MOBILE ── */
+    @media (max-width: 768px) {
+      .cards-grid { grid-template-columns: repeat(2, 1fr); }
+      .mini-stats  { grid-template-columns: repeat(2, 1fr); }
+      .strat-grid  { grid-template-columns: 1fr; }
+      .perf-grid   { grid-template-columns: 1fr; }
+      .tab-row     { overflow-x:auto; padding-bottom:6px; flex-wrap:nowrap; }
+      .tab-btn     { white-space:nowrap; }
+      .main        { padding:12px 14px; }
+      .topbar      { padding:8px 14px; flex-wrap:wrap; gap:6px; }
+      .topbar-right { flex-wrap:wrap; gap:8px; }
+      .summary-strip { flex-wrap:wrap; gap:8px; }
+      .perf-stats-row { grid-template-columns: repeat(2,1fr); }
+    }
+    @media (max-width: 480px) {
+      .cards-grid { grid-template-columns: 1fr; }
+      .card-meta  { flex-wrap:wrap; }
+      .topbar-title { font-size:13px; }
+    }
     /* ── STRATEGIES TAB ── */
     .strat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
     .strat-explain-card { background:#0a0a14; border:1px solid #1a1a2e; border-radius:10px; padding:18px; position:relative; overflow:hidden; }
@@ -183,12 +225,14 @@ const { useState, useEffect, useRef, useCallback } = React;
 // ──────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
 // ──────────────────────────────────────────────────────────────────────────────
-const WATCHLIST = [
+const DEFAULT_WATCHLIST = [
   'NVDA','AAPL','MSFT','TSLA','META','AMZN','GOOG','AMD','AVGO',
   'NFLX','PLTR','SNOW','MS','GS','IBM','ORCL','NKE','PFE','NVO',
   'TSM','RDDT','ETSY','ZM','CRWV','DUOL','EL','PG','INTC','SMCI',
   'BBAI','SPY','QQQM','VTI','VT','NANC'
 ];
+// Keep WATCHLIST as a fallback for non-Dashboard references
+const WATCHLIST = DEFAULT_WATCHLIST;
 
 const STARTING_CAPITAL = 100_000;
 const MAX_POSITIONS    = 10;
@@ -529,8 +573,8 @@ function SetupScreen({ onConnect }) {
             Sign up free at <a href="https://alpaca.markets" target="_blank">alpaca.markets</a>
             &nbsp;→ Dashboard → Paper Trading → API Keys.<br/>
             Your keys are only sent directly to Alpaca — never stored anywhere else.<br/><br/>
-            <strong style={{color:'#334155'}}>Watchlist ({WATCHLIST.length} symbols):</strong>&nbsp;
-            <span style={{color:'#334155'}}>{WATCHLIST.join(', ')}</span>
+            <strong style={{color:'#334155'}}>Default watchlist ({DEFAULT_WATCHLIST.length} symbols):</strong>&nbsp;
+            <span style={{color:'#334155'}}>{DEFAULT_WATCHLIST.join(', ')}</span>
           </p>
         </div>
       </div>
@@ -744,6 +788,148 @@ function StrategyCard({ strategy, portfolio, prices, paused, onPause, onReset })
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// WATCHLIST EDITOR
+// ──────────────────────────────────────────────────────────────────────────────
+function WatchlistEditor({ watchlist, setWatchlist, addLog }) {
+  const [input, setInput] = React.useState('');
+  const [error, setError] = React.useState('');
+
+  const add = () => {
+    const sym = input.trim().toUpperCase();
+    if (!sym) return;
+    if (watchlist.includes(sym)) { setError(`${sym} is already in the watchlist`); return; }
+    if (sym.length > 6) { setError('Symbol too long'); return; }
+    setWatchlist(prev => [...prev, sym]);
+    addLog(`Watchlist: added ${sym}`);
+    setInput(''); setError('');
+  };
+
+  const remove = (sym) => {
+    setWatchlist(prev => prev.filter(s => s !== sym));
+    addLog(`Watchlist: removed ${sym}`);
+  };
+
+  const reset = () => {
+    setWatchlist([...DEFAULT_WATCHLIST]);
+    addLog('Watchlist: reset to defaults');
+  };
+
+  return (
+    <div className="wl-editor">
+      <div className="wl-header">
+        <span className="wl-title">Watchlist — {watchlist.length} symbols</span>
+        <button className="wl-reset" onClick={reset}>↺ Reset to defaults</button>
+      </div>
+      <div className="wl-add-row">
+        <input
+          className="wl-input"
+          placeholder="Add ticker, e.g. COIN"
+          value={input}
+          onChange={e => { setInput(e.target.value.toUpperCase()); setError(''); }}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          maxLength={6}
+        />
+        <button className="btn-wl-add" onClick={add}>+ Add</button>
+      </div>
+      {error && <div style={{ color:'#ef4444', fontSize:11, marginBottom:10 }}>{error}</div>}
+      <div className="wl-chips">
+        {watchlist.map(sym => (
+          <div key={sym} className="wl-chip">
+            {sym}
+            <button className="wl-chip-remove" onClick={() => remove(sym)} title="Remove">×</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ color:'#334155', fontSize:10, marginTop:14, lineHeight:1.6 }}>
+        Changes take effect on the next data refresh. Algos will only trade symbols in this list.
+        Removing a symbol does not close existing positions.
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SIGNAL TIMELINE
+// ──────────────────────────────────────────────────────────────────────────────
+function SignalTimeline({ signals }) {
+  const [filterStrat, setFilterStrat] = React.useState('all');
+  const [filterType,  setFilterType]  = React.useState('all');
+
+  const filtered = signals.filter(s =>
+    (filterStrat === 'all' || s.stratId === filterStrat) &&
+    (filterType  === 'all' || s.signal  === filterType)
+  );
+
+  return (
+    <div className="signal-tl">
+      <div className="signal-filters">
+        <span style={{ fontSize:11, color:'#334155', alignSelf:'center', marginRight:4 }}>Strategy:</span>
+        {[{id:'all',label:'All'}, ...STRATEGIES.map(s=>({id:s.id,label:s.name,color:s.color}))].map(f => (
+          <button key={f.id}
+            className={`signal-filter-btn ${filterStrat===f.id?'active':''}`}
+            style={filterStrat===f.id && f.color ? { borderColor:f.color, color:f.color, background:'transparent' } : {}}
+            onClick={() => setFilterStrat(f.id)}>
+            {f.label}
+          </button>
+        ))}
+        <span style={{ fontSize:11, color:'#334155', alignSelf:'center', marginLeft:8, marginRight:4 }}>Signal:</span>
+        {['all','BUY','SELL'].map(t => (
+          <button key={t}
+            className={`signal-filter-btn ${filterType===t?'active':''}`}
+            style={filterType===t && t==='BUY' ? { borderColor:'#10b981', color:'#10b981', background:'transparent' } :
+                   filterType===t && t==='SELL' ? { borderColor:'#ef4444', color:'#ef4444', background:'transparent' } : {}}
+            onClick={() => setFilterType(t)}>
+            {t === 'all' ? 'All' : t}
+          </button>
+        ))}
+        <span style={{ fontSize:10, color:'#334155', marginLeft:'auto', alignSelf:'center' }}>
+          {filtered.length} signal{filtered.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="signal-empty">
+          {signals.length === 0
+            ? 'No signals yet — signals appear here as algos scan the market.'
+            : 'No signals match the current filter.'}
+        </div>
+      ) : (
+        <div className="tbl-wrap tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Strategy</th>
+                <th>Symbol</th>
+                <th>Signal</th>
+                <th>Price at Signal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.slice(0, 200).map((s, i) => (
+                <tr key={i}>
+                  <td style={{ color:'#334155' }}>
+                    {new Date(s.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})}&nbsp;
+                    {new Date(s.ts).toLocaleTimeString()}
+                  </td>
+                  <td><span style={{ color: s.color, fontSize:10 }}>{s.strategy}</span></td>
+                  <td style={{ fontWeight:600 }}>{s.symbol}</td>
+                  <td>
+                    <span className={s.signal === 'BUY' ? 'signal-dot-buy' : 'signal-dot-sell'} />
+                    <span className={s.signal === 'BUY' ? 'pos' : 'neg'} style={{ fontWeight:600 }}>{s.signal}</span>
+                  </td>
+                  <td>${s.price.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // STRATEGIES TAB
 // ──────────────────────────────────────────────────────────────────────────────
 function StrategiesTab({ params, setParams, setPortfolios, portfolios, addLog }) {
@@ -941,11 +1127,36 @@ function PerformanceTab({ portfolios, prices }) {
 // DASHBOARD
 // ──────────────────────────────────────────────────────────────────────────────
 function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
+  // ── helpers to load persisted state ──
+  const loadPortfolios = () => {
+    try {
+      const s = localStorage.getItem('algotrade_portfolios');
+      if (s) return JSON.parse(s);
+    } catch(_) {}
+    return STRATEGIES.map(() => initPortfolio());
+  };
+  const loadParams = () => {
+    try {
+      const s = localStorage.getItem('algotrade_params');
+      if (s) return JSON.parse(s);
+    } catch(_) {}
+    return STRATEGIES.map(s => ({ ...s.defaultParams }));
+  };
+  const loadWatchlist = () => {
+    try {
+      const s = localStorage.getItem('algotrade_watchlist');
+      if (s) return JSON.parse(s);
+    } catch(_) {}
+    return [...DEFAULT_WATCHLIST];
+  };
+
   // ── state ──
   const [prices,     setPrices]     = useState({});
-  const [portfolios, setPortfolios] = useState(STRATEGIES.map(() => initPortfolio()));
+  const [portfolios, setPortfolios] = useState(loadPortfolios);
   const [paused,     setPaused]     = useState(STRATEGIES.map(() => false));
-  const [params,     setParams]     = useState(STRATEGIES.map(s => ({ ...s.defaultParams })));
+  const [params,     setParams]     = useState(loadParams);
+  const [watchlist,  setWatchlist]  = useState(loadWatchlist);
+  const [signals,    setSignals]    = useState([]);
   const [marketOpen, setMarketOpen] = useState(initClock?.is_open ?? false);
   const [tab,        setTab]        = useState('overview');
   const [status,     setStatus]     = useState('Initializing…');
@@ -960,11 +1171,24 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
   const portfoliosRef = useRef(portfolios);
   const pausedRef     = useRef(paused);
   const paramsRef     = useRef(params);
+  const watchlistRef  = useRef(watchlist);
 
   useEffect(() => { portfoliosRef.current = portfolios; }, [portfolios]);
   useEffect(() => { pausedRef.current     = paused;     }, [paused]);
   useEffect(() => { pricesRef.current     = prices;     }, [prices]);
   useEffect(() => { paramsRef.current     = params;     }, [params]);
+  useEffect(() => { watchlistRef.current  = watchlist;  }, [watchlist]);
+
+  // ── persist to localStorage ──
+  useEffect(() => {
+    try { localStorage.setItem('algotrade_portfolios', JSON.stringify(portfolios)); } catch(_) {}
+  }, [portfolios]);
+  useEffect(() => {
+    try { localStorage.setItem('algotrade_params', JSON.stringify(params)); } catch(_) {}
+  }, [params]);
+  useEffect(() => {
+    try { localStorage.setItem('algotrade_watchlist', JSON.stringify(watchlist)); } catch(_) {}
+  }, [watchlist]);
 
   const addLog = useCallback(msg => {
     const line = `${new Date().toLocaleTimeString()}  ${msg}`;
@@ -973,6 +1197,7 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
 
   // ── run algo logic against current bars + prices ──
   const runAlgos = useCallback((currentBars, currentPrices, currentPortfolios, currentPaused) => {
+    const newSignals = [];
     const updated = currentPortfolios.map((portfolio, i) => {
       const strategy  = STRATEGIES[i];
       let   port      = { ...portfolio, positions: {...portfolio.positions}, trades: [...portfolio.trades] };
@@ -985,13 +1210,16 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
 
       // scan every symbol
       const stratWithParams = { ...strategy, ...(paramsRef.current[i] ?? strategy.defaultParams) };
-      for (const sym of WATCHLIST) {
+      const currentWatchlist = watchlistRef.current;
+      for (const sym of currentWatchlist) {
         const symBars = currentBars[sym];
         if (!symBars || symBars.length < 40) continue;
         const closes  = symBars.map(b => parseFloat(b.c));
         const signal  = getSignal(stratWithParams, closes);
         if (!signal) continue;
         const price   = currentPrices[sym] ?? closes[closes.length - 1];
+        // record signal in timeline
+        newSignals.push({ ts: new Date().toISOString(), strategy: strategy.name, color: strategy.color, stratId: strategy.id, symbol: sym, signal, price });
         const result  = executeTrade(port, sym, signal, price, totalVal);
         if (result) {
           port = result.portfolio;
@@ -1003,6 +1231,9 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
 
     setPortfolios(updated);
     portfoliosRef.current = updated;
+    if (newSignals.length > 0) {
+      setSignals(prev => [...newSignals, ...prev].slice(0, 500));
+    }
     return updated;
   }, [addLog]);
 
@@ -1011,12 +1242,12 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
     setStatus('Fetching data…');
     try {
       // bars
-      const newBars = await fetchBars(WATCHLIST, '5Min', isInit ? BARS_WARMUP : 6, apiKey, apiSecret);
+      const activeWatchlist = watchlistRef.current;
+      const newBars = await fetchBars(activeWatchlist, '5Min', isInit ? BARS_WARMUP : 6, apiKey, apiSecret);
       if (isInit) {
         barsRef.current = newBars;
         addLog(`Loaded historical data for ${Object.keys(newBars).length} symbols`);
       } else {
-        // merge: append new bars, keep last BARS_WARMUP
         const merged = { ...barsRef.current };
         Object.entries(newBars).forEach(([sym, nb]) => {
           const ex  = merged[sym] ?? [];
@@ -1028,7 +1259,7 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
       }
 
       // latest prices
-      const trades = await fetchLatestTrades(WATCHLIST, apiKey, apiSecret);
+      const trades = await fetchLatestTrades(activeWatchlist, apiKey, apiSecret);
       const lp = {};
       Object.entries(trades).forEach(([sym, t]) => { lp[sym] = t.p; });
       setPrices(lp);
@@ -1094,7 +1325,7 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
     <div className="loading-screen">
       <div className="spinner"/>
       <div className="loading-msg">{status}</div>
-      <div style={{ color:'#334155', fontSize:11 }}>Fetching {BARS_WARMUP} bars × {WATCHLIST.length} symbols…</div>
+      <div style={{ color:'#334155', fontSize:11 }}>Fetching {BARS_WARMUP} bars × {watchlist.length} symbols…</div>
     </div>
   );
 
@@ -1155,8 +1386,10 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
               { id:'overview',     label:'📊  Overview'    },
               { id:'positions',    label:'💼  Positions'   },
               { id:'trades',       label:'📝  Trade Log'   },
+              { id:'signals',      label:'📡  Signals'     },
               { id:'performance',  label:'🏆  Performance' },
               { id:'strategies',   label:'📚  Strategies'  },
+              { id:'watchlist',    label:'⚙  Watchlist'   },
               { id:'log',          label:'🔍  Activity Log' },
             ].map(t => (
               <div key={t.id} className={`tab-btn ${tab===t.id?'active':''}`} onClick={() => setTab(t.id)}>
@@ -1195,6 +1428,9 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
           {/* TRADE LOG TAB */}
           {tab === 'trades' && <TradeLog portfolios={portfolios} />}
 
+          {/* SIGNALS TAB */}
+          {tab === 'signals' && <SignalTimeline signals={signals} />}
+
           {/* PERFORMANCE TAB */}
           {tab === 'performance' && <PerformanceTab portfolios={portfolios} prices={prices} />}
 
@@ -1205,6 +1441,15 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
               setParams={setParams}
               setPortfolios={setPortfolios}
               portfolios={portfolios}
+              addLog={addLog}
+            />
+          )}
+
+          {/* WATCHLIST TAB */}
+          {tab === 'watchlist' && (
+            <WatchlistEditor
+              watchlist={watchlist}
+              setWatchlist={setWatchlist}
               addLog={addLog}
             />
           )}
@@ -1222,7 +1467,7 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
 
         {/* TICKER STRIP */}
         <div className="ticker-strip">
-          {WATCHLIST.map(sym => {
+          {watchlist.map(sym => {
             const p = prices[sym];
             return p ? (
               <div key={sym} className="ticker-chip">
