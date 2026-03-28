@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AlgoTrade Simulator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #07070f;
+      color: #e2e8f0;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Courier New', monospace;
+      min-height: 100vh;
+      font-size: 13px;
+    }
+    /* ── SETUP ── */
+    .setup-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; }
+    .setup-card { width:460px; background:#0f0f1e; border:1px solid #1e2040; border-radius:14px; padding:40px; }
+    .logo-row { text-align:center; margin-bottom:32px; }
+    .logo-row .icon { font-size:36px; display:block; margin-bottom:8px; }
+    .logo-row h1 { font-size:22px; font-weight:700; color:#f1f5f9; }
+    .logo-row p { color:#475569; font-size:12px; margin-top:4px; }
+    .field-label { display:block; color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+    .field-wrap { margin-bottom:14px; }
+    .input-field {
+      width:100%; background:#12121f; border:1px solid #252545; border-radius:8px;
+      padding:11px 14px; color:#e2e8f0; font-family:inherit; font-size:13px;
+      outline:none; transition:border-color .2s;
+    }
+    .input-field:focus { border-color:#3b82f6; }
+    .btn-connect {
+      width:100%; background:#3b82f6; color:#fff; border:none; border-radius:8px;
+      padding:12px; font-size:14px; font-weight:600; cursor:pointer; transition:background .2s; margin-top:10px;
+    }
+    .btn-connect:hover:not(:disabled) { background:#2563eb; }
+    .btn-connect:disabled { background:#1e2a3a; color:#475569; cursor:not-allowed; }
+    .err-box { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); border-radius:8px; padding:10px 14px; color:#f87171; font-size:12px; margin-bottom:12px; }
+    .hint-box { background:#0a0a18; border:1px solid #1a1a2e; border-radius:8px; padding:14px; margin-top:18px; }
+    .hint-box p { color:#475569; font-size:11px; line-height:1.7; }
+    .hint-box a { color:#3b82f6; text-decoration:none; }
+    /* ── TOPBAR ── */
+    .topbar {
+      background:#0a0a14; border-bottom:1px solid #15152a; padding:9px 22px;
+      display:flex; justify-content:space-between; align-items:center;
+      position:sticky; top:0; z-index:20;
+    }
+    .topbar-left { display:flex; align-items:center; gap:10px; }
+    .topbar-title { font-size:15px; font-weight:700; color:#f1f5f9; }
+    .topbar-sub { color:#334155; font-size:11px; }
+    .topbar-right { display:flex; align-items:center; gap:14px; }
+    .market-badge { display:flex; align-items:center; gap:6px; }
+    .dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+    .dot-open { background:#10b981; box-shadow:0 0 6px #10b981; animation:pulse 2s infinite; }
+    .dot-closed { background:#ef4444; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .status-text { font-size:11px; }
+    .status-open { color:#10b981; } .status-closed { color:#ef4444; }
+    .update-time { color:#334155; font-size:11px; }
+    /* ── BUTTONS ── */
+    .btn { background:#12121f; color:#64748b; border:1px solid #1e2040; border-radius:6px; padding:4px 12px; font-size:11px; cursor:pointer; transition:all .15s; font-family:inherit; }
+    .btn:hover { background:#1e2040; color:#94a3b8; }
+    .btn-pause { }
+    .btn-pause.paused { background:rgba(59,130,246,.12); color:#3b82f6; border-color:#3b82f6; }
+    .btn-reset { color:#ef4444 !important; }
+    .btn-refresh { }
+    /* ── MAIN LAYOUT ── */
+    .main { padding:18px 22px; }
+    /* ── SUMMARY STRIP ── */
+    .summary-strip { display:flex; align-items:center; gap:20px; margin-bottom:14px; }
+    .summary-val { font-size:13px; color:#94a3b8; }
+    .summary-val strong { color:#f1f5f9; }
+    /* ── STRATEGY CARDS ── */
+    .cards-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+    .s-card {
+      background:#0f0f1e; border:1px solid #1a1a2e; border-radius:10px;
+      padding:14px 16px; position:relative; overflow:hidden;
+    }
+    .s-card::before { content:''; position:absolute; top:0;left:0;right:0; height:3px; }
+    .c-sma::before  { background:#3b82f6; }
+    .c-rsi::before  { background:#10b981; }
+    .c-macd::before { background:#f59e0b; }
+    .c-bb::before   { background:#ec4899; }
+    .card-label { font-size:10px; color:#475569; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; }
+    .card-value { font-size:20px; font-weight:700; color:#f1f5f9; }
+    .card-pnl { font-size:13px; font-weight:600; }
+    .card-pnl-sub { font-size:11px; }
+    .pos { color:#10b981; } .neg { color:#ef4444; } .neu { color:#64748b; }
+    .card-meta { display:flex; gap:14px; margin-top:8px; margin-bottom:8px; }
+    .meta-item .meta-label { font-size:10px; color:#334155; }
+    .meta-item .meta-val { font-size:13px; font-weight:600; color:#94a3b8; }
+    .card-btns { display:flex; gap:6px; margin-top:10px; }
+    /* ── SPARKLINE ── */
+    .sparkline { display:flex; align-items:flex-end; gap:1px; height:28px; margin:6px 0; }
+    .sp-bar { flex:1; min-width:2px; border-radius:1px 1px 0 0; opacity:.7; transition:height .3s; }
+    /* ── PANEL ── */
+    .panel { background:#0f0f1e; border:1px solid #1a1a2e; border-radius:10px; padding:16px 18px; }
+    /* ── TABS ── */
+    .tab-row { display:flex; gap:2px; margin-bottom:14px; border-bottom:1px solid #1a1a2e; padding-bottom:10px; }
+    .tab-btn { padding:5px 14px; border-radius:6px; cursor:pointer; font-size:12px; color:#475569; transition:all .15s; user-select:none; }
+    .tab-btn:hover { color:#94a3b8; }
+    .tab-btn.active { background:#1a1a2e; color:#e2e8f0; }
+    /* ── CHART ── */
+    .chart-wrap { position:relative; height:220px; }
+    /* ── OVERVIEW MINI STATS ── */
+    .mini-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:14px; }
+    .mini-stat { background:#0a0a14; border-radius:8px; padding:10px 14px; border-left:3px solid; }
+    .mini-stat .ms-label { font-size:10px; color:#475569; }
+    .mini-stat .ms-val { font-size:14px; font-weight:600; color:#f1f5f9; margin-top:2px; }
+    .mini-stat .ms-pct { font-size:11px; margin-top:1px; }
+    /* ── TABLE ── */
+    .tbl-wrap { overflow-x:auto; }
+    .tbl-scroll { max-height:300px; overflow-y:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th { text-align:left; padding:7px 10px; color:#334155; font-size:10px; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #1a1a2e; white-space:nowrap; }
+    td { padding:7px 10px; font-size:12px; border-bottom:1px solid #0d0d1a; white-space:nowrap; }
+    tr:hover td { background:#0a0a14; }
+    .badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:700; }
+    .badge-buy  { background:rgba(16,185,129,.15); color:#10b981; }
+    .badge-sell { background:rgba(239,68,68,.15); color:#ef4444; }
+    /* ── LOG ── */
+    .log-wrap { max-height:280px; overflow-y:auto; }
+    .log-line { padding:3px 0; font-size:11px; color:#475569; border-bottom:1px solid #0a0a14; }
+    /* ── TICKER STRIP ── */
+    .ticker-strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+    .ticker-chip { background:#0f0f1e; border:1px solid #1a1a2e; border-radius:5px; padding:3px 9px; font-size:10px; }
+    .ticker-sym { color:#64748b; }
+    .ticker-price { color:#94a3b8; margin-left:4px; }
+    /* ── EMPTY STATES ── */
+    .empty { color:#334155; text-align:center; padding:36px; font-size:12px; }
+    /* ── LOADING ── */
+    .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:14px; }
+    .spinner { width:32px; height:32px; border:3px solid #1a1a2e; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loading-msg { color:#64748b; font-size:13px; }
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width:4px; height:4px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:#1e2040; border-radius:2px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────────────────────────────────────────
+const WATCHLIST = [
+  'NVDA','AAPL','MSFT','TSLA','META','AMZN','GOOG','AMD','AVGO',
+  'NFLX','PLTR','SNOW','MS','GS','IBM','ORCL','NKE','PFE','NVO',
+  'TSM','RDDT','ETSY','ZM','CRWV','DUOL','EL','PG','INTC','SMCI',
+  'BBAI','SPY','QQQM','VTI','VT','NANC'
+];
+
+const STARTING_CAPITAL = 100_000;
+const MAX_POSITIONS    = 10;
+const POSITION_PCT     = 0.10;   // 10% of portfolio value per trade
+const POLL_MS          = 60_000; // refresh every 60 s
+const BARS_WARMUP      = 100;    // historical bars to load per symbol
+const DATA_API         = 'https://data.alpaca.markets';
+const BROKER_API       = 'https://paper-api.alpaca.markets';
+
+const STRATEGIES = [
+  { id:'sma',  name:'SMA Crossover',   color:'#3b82f6', shortP:9,  longP:21 },
+  { id:'rsi',  name:'RSI Strategy',    color:'#10b981', period:14, lo:30, hi:70 },
+  { id:'macd', name:'MACD',            color:'#f59e0b', fast:12, slow:26, sig:9 },
+  { id:'bb',   name:'Bollinger Bands', color:'#ec4899', period:20, mult:2 },
+];
+
+// ──────────────────────────────────────────────────────────────────────────────
+// TECHNICAL INDICATORS
+// ──────────────────────────────────────────────────────────────────────────────
+function sma(arr, n) {
+  if (arr.length < n) return null;
+  return arr.slice(-n).reduce((a,b) => a+b, 0) / n;
+}
+
+function ema(arr, n) {
+  if (arr.length < n) return null;
+  const k = 2 / (n + 1);
+  let val = arr.slice(0, n).reduce((a,b) => a+b, 0) / n;
+  for (let i = n; i < arr.length; i++) val = arr[i] * k + val * (1 - k);
+  return val;
+}
+
+function rsi(arr, n = 14) {
+  if (arr.length < n + 1) return null;
+  const diffs  = arr.slice(1).map((v,i) => v - arr[i]);
+  const recent = diffs.slice(-n);
+  const avgG   = recent.filter(d => d > 0).reduce((a,b) => a+b, 0) / n;
+  const avgL   = recent.filter(d => d < 0).map(d => -d).reduce((a,b) => a+b, 0) / n;
+  if (avgL === 0) return 100;
+  return 100 - 100 / (1 + avgG / avgL);
+}
+
+function macdIndicator(arr) {
+  if (arr.length < 35) return null;
+  // Build MACD line history for signal EMA
+  const hist = [];
+  for (let i = 26; i <= arr.length; i++) {
+    const f = ema(arr.slice(0, i), 12);
+    const s = ema(arr.slice(0, i), 26);
+    if (f != null && s != null) hist.push(f - s);
+  }
+  if (hist.length < 9) return null;
+  const macdNow = hist[hist.length - 1];
+  const sigNow  = ema(hist, 9);
+  return { macd: macdNow, signal: sigNow, histo: macdNow - sigNow };
+}
+
+function bollingerBands(arr, n = 20, mult = 2) {
+  if (arr.length < n) return null;
+  const slice = arr.slice(-n);
+  const mean  = slice.reduce((a,b) => a+b, 0) / n;
+  const std   = Math.sqrt(slice.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / n);
+  return { upper: mean + mult*std, mid: mean, lower: mean - mult*std };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SIGNAL GENERATION  — returns 'BUY' | 'SELL' | null
+// ──────────────────────────────────────────────────────────────────────────────
+function getSignal(strategy, closes) {
+  if (closes.length < 40) return null;
+  const prev = closes.slice(0, -1);
+
+  switch (strategy.id) {
+    case 'sma': {
+      const sNow  = sma(closes, strategy.shortP), lNow  = sma(closes, strategy.longP);
+      const sPrev = sma(prev,   strategy.shortP), lPrev = sma(prev,   strategy.longP);
+      if (!sNow || !lNow || !sPrev || !lPrev) return null;
+      if (sPrev <= lPrev && sNow > lNow) return 'BUY';
+      if (sPrev >= lPrev && sNow < lNow) return 'SELL';
+      return null;
+    }
+    case 'rsi': {
+      const rNow  = rsi(closes);
+      const rPrev = rsi(prev);
+      if (rNow == null || rPrev == null) return null;
+      if (rPrev >= strategy.lo && rNow < strategy.lo) return 'BUY';   // drops into oversold
+      if (rPrev <= strategy.hi && rNow > strategy.hi) return 'SELL';  // rises into overbought
+      return null;
+    }
+    case 'macd': {
+      const mNow  = macdIndicator(closes);
+      const mPrev = macdIndicator(prev);
+      if (!mNow || !mPrev) return null;
+      if (mPrev.histo < 0 && mNow.histo >= 0) return 'BUY';
+      if (mPrev.histo > 0 && mNow.histo <= 0) return 'SELL';
+      return null;
+    }
+    case 'bb': {
+      const bbNow  = bollingerBands(closes);
+      const bbPrev = bollingerBands(prev);
+      if (!bbNow || !bbPrev) return null;
+      const cur = closes[closes.length - 1];
+      const prv = closes[closes.length - 2];
+      if (prv > bbPrev.lower && cur <= bbNow.lower) return 'BUY';
+      if (prv < bbPrev.upper && cur >= bbNow.upper) return 'SELL';
+      return null;
+    }
+  }
+  return null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PORTFOLIO
+// ──────────────────────────────────────────────────────────────────────────────
+function initPortfolio() {
+  return { cash: STARTING_CAPITAL, positions: {}, trades: [], valueHistory: [] };
+}
+
+function portfolioValue(p, prices) {
+  let v = p.cash;
+  for (const [sym, pos] of Object.entries(p.positions))
+    v += pos.shares * (prices[sym] ?? pos.avgCost);
+  return v;
+}
+
+function executeTrade(portfolio, symbol, signal, price, totalVal) {
+  const p = {
+    ...portfolio,
+    positions: { ...portfolio.positions },
+    trades:    [...portfolio.trades],
+  };
+
+  if (signal === 'BUY') {
+    if (p.positions[symbol]) return null;
+    if (Object.keys(p.positions).length >= MAX_POSITIONS) return null;
+    const alloc  = totalVal * POSITION_PCT;
+    const actual = Math.min(alloc, p.cash);
+    if (actual < price) return null;
+    const shares = Math.floor(actual / price);
+    if (shares < 1) return null;
+    p.positions[symbol] = { shares, avgCost: price };
+    p.cash -= shares * price;
+    const t = { ts: new Date().toISOString(), symbol, action:'BUY', shares, price, value: shares*price, pnl: 0 };
+    p.trades = [t, ...p.trades].slice(0, 300);
+    return { portfolio: p, trade: t };
+  }
+
+  if (signal === 'SELL') {
+    const pos = p.positions[symbol];
+    if (!pos) return null;
+    const value = pos.shares * price;
+    const pnl   = (price - pos.avgCost) * pos.shares;
+    p.cash += value;
+    delete p.positions[symbol];
+    const t = { ts: new Date().toISOString(), symbol, action:'SELL', shares: pos.shares, price, value, pnl };
+    p.trades = [t, ...p.trades].slice(0, 300);
+    return { portfolio: p, trade: t };
+  }
+
+  return null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ALPACA API HELPERS
+// ──────────────────────────────────────────────────────────────────────────────
+async function alpacaGet(url, key, secret) {
+  const res = await fetch(url, {
+    headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+async function fetchBars(symbols, timeframe, limit, key, secret) {
+  const result = {};
+  const batchSize = 10;
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    const batch = symbols.slice(i, i + batchSize).join(',');
+    const url   = `${DATA_API}/v2/stocks/bars?symbols=${batch}&timeframe=${timeframe}&limit=${limit}&adjustment=raw&feed=iex`;
+    try {
+      const data = await alpacaGet(url, key, secret);
+      Object.assign(result, data.bars ?? {});
+    } catch (e) { /* skip failed batches */ }
+  }
+  return result;
+}
+
+async function fetchLatestTrades(symbols, key, secret) {
+  const result = {};
+  const batchSize = 10;
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    const batch = symbols.slice(i, i + batchSize).join(',');
+    const url   = `${DATA_API}/v2/stocks/trades/latest?symbols=${batch}&feed=iex`;
+    try {
+      const data = await alpacaGet(url, key, secret);
+      Object.assign(result, data.trades ?? {});
+    } catch (e) { /* skip */ }
+  }
+  return result;
+}
+
+async function fetchClock(key, secret) {
+  return alpacaGet(`${BROKER_API}/v2/clock`, key, secret);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SPARKLINE
+// ──────────────────────────────────────────────────────────────────────────────
+function Sparkline({ data, color }) {
+  if (!data || data.length < 2) return <div style={{height:28}}/>;
+  const min    = Math.min(...data);
+  const max    = Math.max(...data);
+  const range  = max - min || 1;
+  const heights = data.map(v => ((v - min) / range) * 24 + 4);
+  return (
+    <div className="sparkline">
+      {heights.map((h, i) => (
+        <div key={i} className="sp-bar" style={{ height: h, background: color, opacity: .4 + (i/heights.length)*.6 }}/>
+      ))}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SETUP SCREEN
+// ──────────────────────────────────────────────────────────────────────────────
+function SetupScreen({ onConnect }) {
+  const [key, setKey]         = useState(() => localStorage.getItem('alpaca_key')    || '');
+  const [secret, setSecret]   = useState(() => localStorage.getItem('alpaca_secret') || '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const connect = async () => {
+    setLoading(true); setError('');
+    try {
+      const clock = await fetchClock(key, secret);
+      localStorage.setItem('alpaca_key',    key);
+      localStorage.setItem('alpaca_secret', secret);
+      onConnect(key, secret, clock);
+    } catch(e) {
+      setError(`Connection failed — ${e.message}. Make sure you're using Paper Trading API keys from alpaca.markets.`);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="setup-wrap">
+      <div className="setup-card">
+        <div className="logo-row">
+          <span className="icon">📈</span>
+          <h1>AlgoTrade Simulator</h1>
+          <p>Paper trading · Real market data · 4 live strategies</p>
+        </div>
+
+        <div className="field-wrap">
+          <label className="field-label">Alpaca API Key ID</label>
+          <input className="input-field" type="text" placeholder="PKXXXXXXXXXXXXXXXXXXXXXXXX"
+            value={key} onChange={e => setKey(e.target.value)} onKeyDown={e => e.key==='Enter' && connect()} />
+        </div>
+        <div className="field-wrap">
+          <label className="field-label">Alpaca Secret Key</label>
+          <input className="input-field" type="password" placeholder="••••••••••••••••••••••••••••••••"
+            value={secret} onChange={e => setSecret(e.target.value)} onKeyDown={e => e.key==='Enter' && connect()} />
+        </div>
+
+        {error && <div className="err-box">{error}</div>}
+
+        <button className="btn-connect" onClick={connect} disabled={!key || !secret || loading}>
+          {loading ? 'Connecting…' : '🚀  Connect & Launch Simulator'}
+        </button>
+
+        <div className="hint-box">
+          <p>
+            Sign up free at <a href="https://alpaca.markets" target="_blank">alpaca.markets</a>
+            &nbsp;→ Dashboard → Paper Trading → API Keys.<br/>
+            Your keys are only sent directly to Alpaca — never stored anywhere else.<br/><br/>
+            <strong style={{color:'#334155'}}>Watchlist ({WATCHLIST.length} symbols):</strong>&nbsp;
+            <span style={{color:'#334155'}}>{WATCHLIST.join(', ')}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PORTFOLIO COMPARISON CHART
+// ──────────────────────────────────────────────────────────────────────────────
+function PortfolioChart({ portfolios }) {
+  const ref   = useRef(null);
+  const chart = useRef(null);
+
+  useEffect(() => {
+    const ctx = ref.current?.getContext('2d');
+    if (!ctx) return;
+
+    const maxLen   = Math.max(...portfolios.map(p => p.valueHistory.length), 2);
+    const labels   = Array.from({ length: maxLen }, (_, i) => i === 0 ? 'Start' : `T${i}`);
+    const datasets = STRATEGIES.map((s, i) => ({
+      label: s.name,
+      data:  portfolios[i].valueHistory,
+      borderColor: s.color,
+      backgroundColor: s.color + '12',
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.35,
+    }));
+    datasets.push({
+      label: 'Baseline ($100k)',
+      data:  Array(maxLen).fill(STARTING_CAPITAL),
+      borderColor: '#1e2040',
+      borderWidth: 1,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      fill: false,
+    });
+
+    if (chart.current) chart.current.destroy();
+    chart.current = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 400 },
+        plugins: {
+          legend: { labels: { color: '#475569', font: { size: 11, family: 'monospace' }, boxWidth: 12 } },
+          tooltip: {
+            backgroundColor: '#0f0f1e',
+            borderColor: '#1e2040',
+            borderWidth: 1,
+            titleColor: '#64748b',
+            bodyColor: '#e2e8f0',
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: $${(ctx.raw||0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#2a2a4a', font: { size: 9 } }, grid: { color: '#0d0d1a' } },
+          y: {
+            ticks: { color: '#334155', font: { size: 10 }, callback: v => '$' + (v/1000).toFixed(0) + 'k' },
+            grid:  { color: '#0d0d1a' },
+          }
+        }
+      }
+    });
+    return () => chart.current?.destroy();
+  }, [portfolios]);
+
+  return <div className="chart-wrap"><canvas ref={ref}/></div>;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// POSITIONS TABLE
+// ──────────────────────────────────────────────────────────────────────────────
+function PositionsTable({ portfolios, prices }) {
+  const rows = [];
+  STRATEGIES.forEach((s, i) => {
+    Object.entries(portfolios[i].positions).forEach(([sym, pos]) => {
+      const cur   = prices[sym] ?? pos.avgCost;
+      const pnl   = (cur - pos.avgCost) * pos.shares;
+      const pnlPct = ((cur - pos.avgCost) / pos.avgCost) * 100;
+      rows.push({ strat: s, sym, shares: pos.shares, avgCost: pos.avgCost, cur, value: cur*pos.shares, pnl, pnlPct });
+    });
+  });
+
+  if (rows.length === 0) return <div className="empty">No open positions yet — algos are scanning for signals…</div>;
+
+  return (
+    <div className="tbl-wrap tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Strategy</th><th>Symbol</th><th>Shares</th>
+            <th>Avg Cost</th><th>Current</th><th>Mkt Value</th><th>P&amp;L</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td><span style={{ color: r.strat.color, fontSize:10 }}>{r.strat.name}</span></td>
+              <td style={{ fontWeight:600 }}>{r.sym}</td>
+              <td>{r.shares.toLocaleString()}</td>
+              <td>${r.avgCost.toFixed(2)}</td>
+              <td>${r.cur.toFixed(2)}</td>
+              <td>${r.value.toLocaleString('en-US', { maximumFractionDigits:0 })}</td>
+              <td className={r.pnl >= 0 ? 'pos' : 'neg'}>
+                {r.pnl >= 0 ? '+' : ''}{r.pnlPct.toFixed(2)}%
+                <span style={{ fontSize:10, marginLeft:4 }}>
+                  ({r.pnl >= 0 ? '+' : '−'}${Math.abs(r.pnl).toFixed(0)})
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// TRADE LOG
+// ──────────────────────────────────────────────────────────────────────────────
+function TradeLog({ portfolios }) {
+  const all = [];
+  STRATEGIES.forEach((s, i) => {
+    portfolios[i].trades.forEach(t => all.push({ ...t, strat: s }));
+  });
+  all.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+  if (all.length === 0) return <div className="empty">No trades yet — waiting for signals…</div>;
+
+  return (
+    <div className="tbl-wrap tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th><th>Strategy</th><th>Symbol</th>
+            <th>Action</th><th>Shares</th><th>Price</th><th>Value</th><th>P&amp;L</th>
+          </tr>
+        </thead>
+        <tbody>
+          {all.slice(0, 150).map((t, i) => (
+            <tr key={i}>
+              <td style={{ color:'#334155' }}>{new Date(t.ts).toLocaleTimeString()}</td>
+              <td><span style={{ color: t.strat.color, fontSize:10 }}>{t.strat.name}</span></td>
+              <td style={{ fontWeight:600 }}>{t.symbol}</td>
+              <td><span className={`badge badge-${t.action.toLowerCase()}`}>{t.action}</span></td>
+              <td>{t.shares.toLocaleString()}</td>
+              <td>${t.price.toFixed(2)}</td>
+              <td>${t.value.toLocaleString('en-US', { maximumFractionDigits:0 })}</td>
+              <td className={t.pnl > 0 ? 'pos' : t.pnl < 0 ? 'neg' : 'neu'}>
+                {t.pnl !== 0 ? `${t.pnl > 0 ? '+' : '−'}$${Math.abs(t.pnl).toFixed(0)}` : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// STRATEGY CARD
+// ──────────────────────────────────────────────────────────────────────────────
+function StrategyCard({ strategy, portfolio, prices, paused, onPause, onReset }) {
+  const val      = portfolioValue(portfolio, prices);
+  const pnl      = val - STARTING_CAPITAL;
+  const pnlPct   = (pnl / STARTING_CAPITAL) * 100;
+  const posCount = Object.keys(portfolio.positions).length;
+  const pnlClass = pnl >= 0 ? 'pos' : 'neg';
+
+  return (
+    <div className={`s-card c-${strategy.id}`}>
+      <div className="card-label">{strategy.name}{paused && <span style={{color:'#3b82f6', marginLeft:6}}>[PAUSED]</span>}</div>
+      <div className="card-value">${val.toLocaleString('en-US', { maximumFractionDigits:0 })}</div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:2 }}>
+        <span className={`card-pnl ${pnlClass}`}>{pnl>=0?'+':''}{pnlPct.toFixed(2)}%</span>
+        <span className={`card-pnl-sub ${pnlClass}`}>{pnl>=0?'+':'−'}${Math.abs(pnl).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
+      </div>
+
+      <Sparkline data={portfolio.valueHistory.slice(-24)} color={strategy.color} />
+
+      <div className="card-meta">
+        <div className="meta-item">
+          <div className="meta-label">Positions</div>
+          <div className="meta-val">{posCount}/{MAX_POSITIONS}</div>
+        </div>
+        <div className="meta-item">
+          <div className="meta-label">Cash</div>
+          <div className="meta-val">${(portfolio.cash/1000).toFixed(1)}k</div>
+        </div>
+        <div className="meta-item">
+          <div className="meta-label">Trades</div>
+          <div className="meta-val">{portfolio.trades.length}</div>
+        </div>
+      </div>
+
+      <div className="card-btns">
+        <button className={`btn btn-pause ${paused ? 'paused' : ''}`} onClick={onPause}>
+          {paused ? '▶ Resume' : '⏸ Pause'}
+        </button>
+        <button className="btn btn-reset" onClick={onReset}>↺ Reset</button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DASHBOARD
+// ──────────────────────────────────────────────────────────────────────────────
+function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
+  // ── state ──
+  const [prices,     setPrices]     = useState({});
+  const [portfolios, setPortfolios] = useState(STRATEGIES.map(() => initPortfolio()));
+  const [paused,     setPaused]     = useState(STRATEGIES.map(() => false));
+  const [marketOpen, setMarketOpen] = useState(initClock?.is_open ?? false);
+  const [tab,        setTab]        = useState('overview');
+  const [status,     setStatus]     = useState('Initializing…');
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [logs,       setLogs]       = useState([]);
+  const [countdown,  setCountdown]  = useState(POLL_MS / 1000);
+
+  // ── refs to avoid stale closures in interval ──
+  const pricesRef     = useRef({});
+  const barsRef       = useRef({});
+  const portfoliosRef = useRef(portfolios);
+  const pausedRef     = useRef(paused);
+
+  useEffect(() => { portfoliosRef.current = portfolios; }, [portfolios]);
+  useEffect(() => { pausedRef.current     = paused;     }, [paused]);
+  useEffect(() => { pricesRef.current     = prices;     }, [prices]);
+
+  const addLog = useCallback(msg => {
+    const line = `${new Date().toLocaleTimeString()}  ${msg}`;
+    setLogs(prev => [line, ...prev].slice(0, 80));
+  }, []);
+
+  // ── run algo logic against current bars + prices ──
+  const runAlgos = useCallback((currentBars, currentPrices, currentPortfolios, currentPaused) => {
+    const updated = currentPortfolios.map((portfolio, i) => {
+      const strategy  = STRATEGIES[i];
+      let   port      = { ...portfolio, positions: {...portfolio.positions}, trades: [...portfolio.trades] };
+      const totalVal  = portfolioValue(port, currentPrices);
+
+      // record value snapshot
+      port.valueHistory = [...(port.valueHistory ?? []), totalVal].slice(-200);
+
+      if (currentPaused[i]) return port;
+
+      // scan every symbol
+      for (const sym of WATCHLIST) {
+        const symBars = currentBars[sym];
+        if (!symBars || symBars.length < 40) continue;
+        const closes  = symBars.map(b => parseFloat(b.c));
+        const signal  = getSignal(strategy, closes);
+        if (!signal) continue;
+        const price   = currentPrices[sym] ?? closes[closes.length - 1];
+        const result  = executeTrade(port, sym, signal, price, totalVal);
+        if (result) {
+          port = result.portfolio;
+          addLog(`[${strategy.name}]  ${signal}  ${sym}  @ $${price.toFixed(2)}`);
+        }
+      }
+      return port;
+    });
+
+    setPortfolios(updated);
+    portfoliosRef.current = updated;
+    return updated;
+  }, [addLog]);
+
+  // ── fetch bars + latest prices + run algos ──
+  const refresh = useCallback(async (isInit = false) => {
+    setStatus('Fetching data…');
+    try {
+      // bars
+      const newBars = await fetchBars(WATCHLIST, '5Min', isInit ? BARS_WARMUP : 6, apiKey, apiSecret);
+      if (isInit) {
+        barsRef.current = newBars;
+        addLog(`Loaded historical data for ${Object.keys(newBars).length} symbols`);
+      } else {
+        // merge: append new bars, keep last BARS_WARMUP
+        const merged = { ...barsRef.current };
+        Object.entries(newBars).forEach(([sym, nb]) => {
+          const ex  = merged[sym] ?? [];
+          const cut = ex.length ? ex[ex.length-1].t : '';
+          const add = nb.filter(b => b.t > cut);
+          merged[sym] = [...ex, ...add].slice(-BARS_WARMUP);
+        });
+        barsRef.current = merged;
+      }
+
+      // latest prices
+      const trades = await fetchLatestTrades(WATCHLIST, apiKey, apiSecret);
+      const lp = {};
+      Object.entries(trades).forEach(([sym, t]) => { lp[sym] = t.p; });
+      setPrices(lp);
+      pricesRef.current = lp;
+      addLog(`Prices updated for ${Object.keys(lp).length} symbols`);
+
+      // market clock
+      try {
+        const clock = await fetchClock(apiKey, apiSecret);
+        setMarketOpen(clock.is_open);
+      } catch(_) {}
+
+      // run algos
+      runAlgos(barsRef.current, lp, portfoliosRef.current, pausedRef.current);
+      setLastUpdate(new Date());
+      setStatus('Live');
+      setCountdown(POLL_MS / 1000);
+    } catch(e) {
+      setStatus('Error');
+      addLog(`❌  ${e.message}`);
+    }
+  }, [apiKey, apiSecret, runAlgos, addLog]);
+
+  // ── initial load ──
+  useEffect(() => {
+    refresh(true).finally(() => setLoading(false));
+  }, []);
+
+  // ── polling interval ──
+  useEffect(() => {
+    if (loading) return;
+    const poll = setInterval(() => refresh(false), POLL_MS);
+    const tick = setInterval(() => setCountdown(c => c <= 1 ? POLL_MS/1000 : c - 1), 1000);
+    return () => { clearInterval(poll); clearInterval(tick); };
+  }, [loading, refresh]);
+
+  // ── pause / reset handlers ──
+  const togglePause = i => {
+    setPaused(prev => {
+      const n = [...prev];
+      n[i] = !n[i];
+      addLog(`[${STRATEGIES[i].name}]  ${n[i] ? 'PAUSED' : 'RESUMED'}`);
+      return n;
+    });
+  };
+  const resetStrategy = i => {
+    setPortfolios(prev => {
+      const n = [...prev];
+      n[i] = initPortfolio();
+      portfoliosRef.current = n;
+      return n;
+    });
+    addLog(`[${STRATEGIES[i].name}]  RESET to $${STARTING_CAPITAL.toLocaleString()}`);
+  };
+
+  // ── derived totals ──
+  const totalVal = portfolios.reduce((s, p) => s + portfolioValue(p, prices), 0);
+  const totalPnl = totalVal - STARTING_CAPITAL * 4;
+  const totalPct = (totalPnl / (STARTING_CAPITAL * 4)) * 100;
+
+  // ── loading screen ──
+  if (loading) return (
+    <div className="loading-screen">
+      <div className="spinner"/>
+      <div className="loading-msg">{status}</div>
+      <div style={{ color:'#334155', fontSize:11 }}>Fetching {BARS_WARMUP} bars × {WATCHLIST.length} symbols…</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* TOP BAR */}
+      <div className="topbar">
+        <div className="topbar-left">
+          <span className="topbar-title">📈 AlgoTrade</span>
+          <span className="topbar-sub">Simulator</span>
+        </div>
+        <div className="topbar-right">
+          <div className="market-badge">
+            <div className={`dot ${marketOpen ? 'dot-open' : 'dot-closed'}`}/>
+            <span className={`status-text ${marketOpen ? 'status-open' : 'status-closed'}`}>
+              {marketOpen ? 'Market Open' : 'Market Closed'}
+            </span>
+          </div>
+          <span className="update-time">
+            {lastUpdate ? `↺ ${lastUpdate.toLocaleTimeString()}  ·  next ${countdown}s` : status}
+          </span>
+          <button className="btn btn-refresh" onClick={() => refresh(false)}>↻ Refresh Now</button>
+          <button className="btn" onClick={onDisconnect} style={{color:'#475569'}}>⚙ Change Keys</button>
+        </div>
+      </div>
+
+      <div className="main">
+        {/* SUMMARY STRIP */}
+        <div className="summary-strip">
+          <div className="summary-val">
+            Combined Portfolio:&nbsp;<strong>${totalVal.toLocaleString('en-US',{maximumFractionDigits:0})}</strong>
+          </div>
+          <div className={totalPnl >= 0 ? 'pos' : 'neg'} style={{ fontSize:12 }}>
+            {totalPnl >= 0 ? '+' : ''}{totalPct.toFixed(2)}% across all strategies
+            &nbsp;({totalPnl >= 0 ? '+' : '−'}${Math.abs(totalPnl).toLocaleString('en-US',{maximumFractionDigits:0})})
+          </div>
+        </div>
+
+        {/* STRATEGY CARDS */}
+        <div className="cards-grid">
+          {STRATEGIES.map((s, i) => (
+            <StrategyCard
+              key={s.id}
+              strategy={s}
+              portfolio={portfolios[i]}
+              prices={prices}
+              paused={paused[i]}
+              onPause={() => togglePause(i)}
+              onReset={() => resetStrategy(i)}
+            />
+          ))}
+        </div>
+
+        {/* MAIN PANEL */}
+        <div className="panel">
+          <div className="tab-row">
+            {[
+              { id:'overview',   label:'📊  Overview'    },
+              { id:'positions',  label:'💼  Positions'   },
+              { id:'trades',     label:'📝  Trade Log'   },
+              { id:'log',        label:'🔍  Activity Log' },
+            ].map(t => (
+              <div key={t.id} className={`tab-btn ${tab===t.id?'active':''}`} onClick={() => setTab(t.id)}>
+                {t.label}
+              </div>
+            ))}
+          </div>
+
+          {/* OVERVIEW TAB */}
+          {tab === 'overview' && (
+            <>
+              <div style={{ color:'#334155', fontSize:10, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:10 }}>
+                Portfolio Value Over Time
+              </div>
+              <PortfolioChart portfolios={portfolios} />
+              <div className="mini-stats">
+                {STRATEGIES.map((s, i) => {
+                  const val  = portfolioValue(portfolios[i], prices);
+                  const pnl  = val - STARTING_CAPITAL;
+                  const pct  = (pnl / STARTING_CAPITAL) * 100;
+                  return (
+                    <div key={s.id} className="mini-stat" style={{ borderLeftColor: s.color }}>
+                      <div className="ms-label">{s.name}</div>
+                      <div className="ms-val">${val.toLocaleString('en-US',{maximumFractionDigits:0})}</div>
+                      <div className={`ms-pct ${pnl>=0?'pos':'neg'}`}>{pnl>=0?'+':''}{pct.toFixed(2)}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* POSITIONS TAB */}
+          {tab === 'positions' && <PositionsTable portfolios={portfolios} prices={prices} />}
+
+          {/* TRADE LOG TAB */}
+          {tab === 'trades' && <TradeLog portfolios={portfolios} />}
+
+          {/* ACTIVITY LOG TAB */}
+          {tab === 'log' && (
+            <div className="log-wrap">
+              {logs.length === 0
+                ? <div className="empty">Activity log is empty</div>
+                : logs.map((l, i) => <div key={i} className="log-line">{l}</div>)
+              }
+            </div>
+          )}
+        </div>
+
+        {/* TICKER STRIP */}
+        <div className="ticker-strip">
+          {WATCHLIST.map(sym => {
+            const p = prices[sym];
+            return p ? (
+              <div key={sym} className="ticker-chip">
+                <span className="ticker-sym">{sym}</span>
+                <span className="ticker-price">${p.toFixed(2)}</span>
+              </div>
+            ) : null;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ROOT
+// ──────────────────────────────────────────────────────────────────────────────
+function App() {
+  const [session,       setSession]       = useState(null);
+  const [autoConnecting, setAutoConnecting] = useState(true);
+
+  // On first load, try to reconnect using saved keys
+  useEffect(() => {
+    const savedKey    = localStorage.getItem('alpaca_key');
+    const savedSecret = localStorage.getItem('alpaca_secret');
+    if (savedKey && savedSecret) {
+      fetchClock(savedKey, savedSecret)
+        .then(clock => setSession({ key: savedKey, secret: savedSecret, clock }))
+        .catch(() => {}) // keys expired or invalid — fall through to setup screen
+        .finally(() => setAutoConnecting(false));
+    } else {
+      setAutoConnecting(false);
+    }
+  }, []);
+
+  const disconnect = () => {
+    localStorage.removeItem('alpaca_key');
+    localStorage.removeItem('alpaca_secret');
+    setSession(null);
+  };
+
+  if (autoConnecting) return (
+    <div className="loading-screen">
+      <div className="spinner"/>
+      <div className="loading-msg">Reconnecting…</div>
+    </div>
+  );
+
+  if (!session) {
+    return <SetupScreen onConnect={(key, secret, clock) => setSession({ key, secret, clock })} />;
+  }
+  return <Dashboard apiKey={session.key} apiSecret={session.secret} initClock={session.clock} onDisconnect={disconnect} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
