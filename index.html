@@ -136,6 +136,12 @@
     .spinner { width:32px; height:32px; border:3px solid #1a1a2e; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
     .loading-msg { color:#64748b; font-size:13px; }
+    /* ── TIMEFRAME SWITCHER ── */
+    .tf-row { display:flex; align-items:center; gap:4px; }
+    .tf-label { font-size:10px; color:#334155; margin-right:4px; text-transform:uppercase; letter-spacing:.05em; }
+    .tf-btn { padding:3px 9px; border-radius:5px; font-size:10px; border:1px solid #1a1a2e; background:transparent; color:#475569; cursor:pointer; font-family:inherit; transition:all .15s; }
+    .tf-btn:hover { color:#94a3b8; border-color:#334155; }
+    .tf-btn.active { background:#1a1a2e; color:#e2e8f0; border-color:#1a1a2e; }
     /* ── WATCHLIST EDITOR ── */
     .wl-editor { }
     .wl-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
@@ -454,6 +460,49 @@ function calcPerformance(portfolio) {
   const worst = sells.reduce((m, t) => t.pnl < m.pnl ? t : m, sells[0]);
   return { winRate, totalTrades: sells.length, wins: wins.length, losses: losses.length,
            avgGain, avgLoss, profitFactor, grossGain, grossLoss, best, worst };
+}
+
+function calcMaxDrawdown(valueHistory) {
+  if (valueHistory.length < 2) return 0;
+  let peak = valueHistory[0];
+  let maxDD = 0;
+  for (const v of valueHistory) {
+    if (v > peak) peak = v;
+    const dd = peak > 0 ? (peak - v) / peak : 0;
+    if (dd > maxDD) maxDD = dd;
+  }
+  return maxDD; // 0–1 fraction
+}
+
+function calcSharpe(valueHistory) {
+  if (valueHistory.length < 4) return null;
+  const returns = [];
+  for (let i = 1; i < valueHistory.length; i++) {
+    if (valueHistory[i - 1] > 0)
+      returns.push((valueHistory[i] - valueHistory[i - 1]) / valueHistory[i - 1]);
+  }
+  if (returns.length < 3) return null;
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+  const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+  const std = Math.sqrt(variance);
+  if (std === 0) return null;
+  // Annualise using stored timeframe (bars/day × 252 trading days)
+  const tfBarsPerDay = { '1Min':390, '5Min':78, '15Min':26, '1Hour':6.5 };
+  const bpd = tfBarsPerDay[localStorage.getItem('algotrade_timeframe') || '5Min'] || 78;
+  return (mean / std) * Math.sqrt(bpd * 252);
+}
+
+function calcSymbolBreakdown(portfolio) {
+  const map = {};
+  for (const t of portfolio.trades) {
+    if (t.action !== 'SELL') continue;
+    if (!map[t.symbol]) map[t.symbol] = { sym: t.symbol, trades: 0, wins: 0, losses: 0, totalPnl: 0 };
+    const e = map[t.symbol];
+    e.trades++;
+    e.totalPnl += t.pnl;
+    if (t.pnl > 0) e.wins++; else if (t.pnl < 0) e.losses++;
+  }
+  return Object.values(map).sort((a, b) => b.totalPnl - a.totalPnl);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1010,115 +1059,202 @@ function StrategiesTab({ params, setParams, setPortfolios, portfolios, addLog })
 // PERFORMANCE TAB
 // ──────────────────────────────────────────────────────────────────────────────
 function PerformanceTab({ portfolios, prices }) {
-  const fmt   = (n, dec=2) => n >= 0 ? `+$${n.toFixed(dec)}` : `-$${Math.abs(n).toFixed(dec)}`;
-  const fmtPf = (n) => n >= 9.99 ? '∞' : n.toFixed(2);
+  const [subTab, setSubTab] = React.useState('summary');
+  const fmtPf  = (n) => n >= 9.99 ? '∞' : n.toFixed(2);
+  const fmtPnl = (n) => n >= 0 ? `+$${n.toFixed(0)}` : `-$${Math.abs(n).toFixed(0)}`;
+  const sharpeColor = (s) => s === null ? '#475569' : s >= 1 ? '#10b981' : s >= 0 ? '#f59e0b' : '#ef4444';
+  const ddColor     = (d) => d < 0.05 ? '#10b981' : d < 0.15 ? '#f59e0b' : '#ef4444';
+
+  const subTabs = [
+    { id:'summary',   label:'Summary Cards' },
+    { id:'compare',   label:'Head-to-Head'  },
+    { id:'symbols',   label:'Per-Symbol Breakdown' },
+  ];
 
   return (
     <div>
-      <div className="perf-header">Closed-trade performance — updates after each SELL</div>
-      <div className="perf-grid">
-        {STRATEGIES.map((s, i) => {
-          const perf = calcPerformance(portfolios[i]);
-          const val  = portfolioValue(portfolios[i], prices);
-          const pnl  = val - STARTING_CAPITAL;
-          return (
-            <div key={s.id} className="perf-card" style={{ borderLeftColor: s.color }}>
-              <div className="perf-card-name" style={{ color: s.color }}>{s.name}</div>
-              {perf ? (
-                <>
-                  <div className="perf-stats-row">
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">Win Rate</div>
-                      <div className="perf-stat-val" style={{ color: perf.winRate >= .5 ? '#10b981' : '#ef4444' }}>
-                        {(perf.winRate * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">Trades</div>
-                      <div className="perf-stat-val">{perf.totalTrades}</div>
-                    </div>
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">Profit Factor</div>
-                      <div className="perf-stat-val" style={{ color: perf.profitFactor >= 1 ? '#10b981' : '#ef4444' }}>
-                        {fmtPf(perf.profitFactor)}
-                      </div>
-                    </div>
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">Avg Win</div>
-                      <div className="perf-stat-val pos">{perf.avgGain > 0 ? `+$${perf.avgGain.toFixed(0)}` : '—'}</div>
-                    </div>
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">Avg Loss</div>
-                      <div className="perf-stat-val neg">{perf.avgLoss < 0 ? `-$${Math.abs(perf.avgLoss).toFixed(0)}` : '—'}</div>
-                    </div>
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">Portfolio P&amp;L</div>
-                      <div className={`perf-stat-val ${pnl >= 0 ? 'pos' : 'neg'}`}>{pnl >= 0 ? '+' : ''}{((pnl/STARTING_CAPITAL)*100).toFixed(2)}%</div>
-                    </div>
-                  </div>
-                  <div className="perf-trade-row">
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">🏆 Best Trade</div>
-                      <div className="perf-stat-val pos" style={{ fontSize:11 }}>
-                        {perf.best.symbol} {fmt(perf.best.pnl, 0)}
-                      </div>
-                    </div>
-                    <div className="perf-stat">
-                      <div className="perf-stat-label">💀 Worst Trade</div>
-                      <div className="perf-stat-val neg" style={{ fontSize:11 }}>
-                        {perf.worst.symbol} {fmt(perf.worst.pnl, 0)}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="perf-empty">No closed trades yet — stats appear after first SELL</div>
-              )}
-            </div>
-          );
-        })}
+      {/* sub-tab row */}
+      <div style={{ display:'flex', gap:6, marginBottom:14 }}>
+        {subTabs.map(t => (
+          <div key={t.id}
+            className={`tab-btn ${subTab===t.id?'active':''}`}
+            style={{ fontSize:11 }}
+            onClick={() => setSubTab(t.id)}>
+            {t.label}
+          </div>
+        ))}
       </div>
 
-      {/* Head-to-head comparison table */}
-      <div style={{ marginTop:4 }}>
-        <div className="perf-header" style={{ marginBottom:10 }}>Head-to-head comparison</div>
+      {/* ── SUMMARY CARDS ── */}
+      {subTab === 'summary' && (
+        <div className="perf-grid">
+          {STRATEGIES.map((s, i) => {
+            const perf   = calcPerformance(portfolios[i]);
+            const val    = portfolioValue(portfolios[i], prices);
+            const pnl    = val - STARTING_CAPITAL;
+            const sharpe = calcSharpe(portfolios[i].valueHistory);
+            const mdd    = calcMaxDrawdown(portfolios[i].valueHistory);
+            return (
+              <div key={s.id} className="perf-card" style={{ borderLeftColor: s.color }}>
+                <div className="perf-card-name" style={{ color: s.color }}>{s.name}</div>
+                {/* top row: P&L + Sharpe + Drawdown */}
+                <div className="perf-stats-row" style={{ marginBottom:8 }}>
+                  <div className="perf-stat">
+                    <div className="perf-stat-label">Portfolio P&amp;L</div>
+                    <div className={`perf-stat-val ${pnl>=0?'pos':'neg'}`}>
+                      {pnl>=0?'+':''}{((pnl/STARTING_CAPITAL)*100).toFixed(2)}%
+                    </div>
+                  </div>
+                  <div className="perf-stat">
+                    <div className="perf-stat-label">Sharpe Ratio</div>
+                    <div className="perf-stat-val" style={{ color: sharpeColor(sharpe) }}>
+                      {sharpe !== null ? sharpe.toFixed(2) : '—'}
+                    </div>
+                  </div>
+                  <div className="perf-stat">
+                    <div className="perf-stat-label">Max Drawdown</div>
+                    <div className="perf-stat-val" style={{ color: ddColor(mdd) }}>
+                      {portfolios[i].valueHistory.length > 1 ? `${(mdd*100).toFixed(1)}%` : '—'}
+                    </div>
+                  </div>
+                </div>
+                {perf ? (
+                  <>
+                    <div className="perf-stats-row">
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">Win Rate</div>
+                        <div className="perf-stat-val" style={{ color: perf.winRate>=.5?'#10b981':'#ef4444' }}>
+                          {(perf.winRate*100).toFixed(0)}%
+                        </div>
+                      </div>
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">Trades</div>
+                        <div className="perf-stat-val">{perf.totalTrades} ({perf.wins}W / {perf.losses}L)</div>
+                      </div>
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">Profit Factor</div>
+                        <div className="perf-stat-val" style={{ color: perf.profitFactor>=1?'#10b981':'#ef4444' }}>
+                          {fmtPf(perf.profitFactor)}
+                        </div>
+                      </div>
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">Avg Win</div>
+                        <div className="perf-stat-val pos">{perf.avgGain>0 ? `+$${perf.avgGain.toFixed(0)}` : '—'}</div>
+                      </div>
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">Avg Loss</div>
+                        <div className="perf-stat-val neg">{perf.avgLoss<0 ? `-$${Math.abs(perf.avgLoss).toFixed(0)}` : '—'}</div>
+                      </div>
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">Net Closed P&amp;L</div>
+                        <div className={`perf-stat-val ${perf.grossGain-perf.grossLoss>=0?'pos':'neg'}`}>
+                          {fmtPnl(perf.grossGain - perf.grossLoss)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="perf-trade-row">
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">🏆 Best Trade</div>
+                        <div className="perf-stat-val pos" style={{ fontSize:11 }}>{perf.best.symbol} {fmtPnl(perf.best.pnl)}</div>
+                      </div>
+                      <div className="perf-stat">
+                        <div className="perf-stat-label">💀 Worst Trade</div>
+                        <div className="perf-stat-val neg" style={{ fontSize:11 }}>{perf.worst.symbol} {fmtPnl(perf.worst.pnl)}</div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="perf-empty">No closed trades yet — stats appear after first SELL</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── HEAD-TO-HEAD TABLE ── */}
+      {subTab === 'compare' && (
         <div className="tbl-wrap">
           <table>
             <thead>
               <tr>
-                <th>Strategy</th>
-                <th>Portfolio Value</th>
-                <th>P&amp;L</th>
-                <th>Win Rate</th>
-                <th>Trades</th>
-                <th>Profit Factor</th>
-                <th>Avg Win</th>
-                <th>Avg Loss</th>
+                <th>Strategy</th><th>Value</th><th>P&amp;L</th>
+                <th>Sharpe</th><th>Max DD</th>
+                <th>Win Rate</th><th>Trades</th>
+                <th>Profit Factor</th><th>Avg Win</th><th>Avg Loss</th>
               </tr>
             </thead>
             <tbody>
               {STRATEGIES.map((s, i) => {
-                const perf = calcPerformance(portfolios[i]);
-                const val  = portfolioValue(portfolios[i], prices);
-                const pnl  = val - STARTING_CAPITAL;
-                const pct  = (pnl / STARTING_CAPITAL) * 100;
+                const perf   = calcPerformance(portfolios[i]);
+                const val    = portfolioValue(portfolios[i], prices);
+                const pnl    = val - STARTING_CAPITAL;
+                const pct    = (pnl / STARTING_CAPITAL) * 100;
+                const sharpe = calcSharpe(portfolios[i].valueHistory);
+                const mdd    = calcMaxDrawdown(portfolios[i].valueHistory);
                 return (
                   <tr key={s.id}>
-                    <td><span style={{ color: s.color, fontWeight:600 }}>{s.name}</span></td>
-                    <td>${val.toLocaleString('en-US', { maximumFractionDigits:0 })}</td>
-                    <td className={pnl >= 0 ? 'pos' : 'neg'}>{pnl >= 0 ? '+' : ''}{pct.toFixed(2)}%</td>
+                    <td><span style={{ color:s.color, fontWeight:600 }}>{s.name}</span></td>
+                    <td>${val.toLocaleString('en-US',{maximumFractionDigits:0})}</td>
+                    <td className={pnl>=0?'pos':'neg'}>{pnl>=0?'+':''}{pct.toFixed(2)}%</td>
+                    <td style={{ color: sharpeColor(sharpe) }}>{sharpe!==null ? sharpe.toFixed(2) : '—'}</td>
+                    <td style={{ color: ddColor(mdd) }}>{portfolios[i].valueHistory.length>1 ? `${(mdd*100).toFixed(1)}%` : '—'}</td>
                     <td>{perf ? `${(perf.winRate*100).toFixed(0)}% (${perf.wins}W/${perf.losses}L)` : '—'}</td>
                     <td>{perf ? perf.totalTrades : '—'}</td>
                     <td>{perf ? fmtPf(perf.profitFactor) : '—'}</td>
-                    <td className="pos">{perf && perf.avgGain > 0 ? `+$${perf.avgGain.toFixed(0)}` : '—'}</td>
-                    <td className="neg">{perf && perf.avgLoss < 0 ? `-$${Math.abs(perf.avgLoss).toFixed(0)}` : '—'}</td>
+                    <td className="pos">{perf&&perf.avgGain>0 ? `+$${perf.avgGain.toFixed(0)}` : '—'}</td>
+                    <td className="neg">{perf&&perf.avgLoss<0 ? `-$${Math.abs(perf.avgLoss).toFixed(0)}` : '—'}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-      </div>
+      )}
+
+      {/* ── PER-SYMBOL BREAKDOWN ── */}
+      {subTab === 'symbols' && (
+        <div>
+          <div className="perf-header" style={{ marginBottom:12 }}>
+            Which symbols each strategy has traded — sorted by total P&amp;L
+          </div>
+          {STRATEGIES.map((s, i) => {
+            const breakdown = calcSymbolBreakdown(portfolios[i]);
+            return (
+              <div key={s.id} style={{ marginBottom:20 }}>
+                <div style={{ color:s.color, fontWeight:700, fontSize:12, marginBottom:8, borderBottom:'1px solid #1a1a2e', paddingBottom:6 }}>
+                  {s.name}
+                  {breakdown.length === 0 && <span style={{ color:'#334155', fontWeight:400, marginLeft:8 }}>— no closed trades yet</span>}
+                </div>
+                {breakdown.length > 0 && (
+                  <div className="tbl-wrap">
+                    <table>
+                      <thead>
+                        <tr><th>Symbol</th><th>Closed Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>Total P&amp;L</th><th>Avg P&amp;L</th></tr>
+                      </thead>
+                      <tbody>
+                        {breakdown.map(row => (
+                          <tr key={row.sym}>
+                            <td style={{ fontWeight:600 }}>{row.sym}</td>
+                            <td>{row.trades}</td>
+                            <td className="pos">{row.wins}</td>
+                            <td className="neg">{row.losses}</td>
+                            <td style={{ color: row.wins/row.trades>=.5?'#10b981':'#ef4444' }}>
+                              {row.trades>0 ? `${((row.wins/row.trades)*100).toFixed(0)}%` : '—'}
+                            </td>
+                            <td className={row.totalPnl>=0?'pos':'neg'}>{fmtPnl(row.totalPnl)}</td>
+                            <td className={row.totalPnl/row.trades>=0?'pos':'neg'}>{fmtPnl(row.totalPnl/row.trades)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1149,6 +1285,7 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
     } catch(_) {}
     return [...DEFAULT_WATCHLIST];
   };
+  const loadTimeframe = () => localStorage.getItem('algotrade_timeframe') || '5Min';
 
   // ── state ──
   const [prices,     setPrices]     = useState({});
@@ -1156,6 +1293,7 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
   const [paused,     setPaused]     = useState(STRATEGIES.map(() => false));
   const [params,     setParams]     = useState(loadParams);
   const [watchlist,  setWatchlist]  = useState(loadWatchlist);
+  const [timeframe,  setTimeframe]  = useState(loadTimeframe);
   const [signals,    setSignals]    = useState([]);
   const [marketOpen, setMarketOpen] = useState(initClock?.is_open ?? false);
   const [tab,        setTab]        = useState('overview');
@@ -1172,12 +1310,14 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
   const pausedRef     = useRef(paused);
   const paramsRef     = useRef(params);
   const watchlistRef  = useRef(watchlist);
+  const timeframeRef  = useRef(timeframe);
 
   useEffect(() => { portfoliosRef.current = portfolios; }, [portfolios]);
   useEffect(() => { pausedRef.current     = paused;     }, [paused]);
   useEffect(() => { pricesRef.current     = prices;     }, [prices]);
   useEffect(() => { paramsRef.current     = params;     }, [params]);
   useEffect(() => { watchlistRef.current  = watchlist;  }, [watchlist]);
+  useEffect(() => { timeframeRef.current  = timeframe;  }, [timeframe]);
 
   // ── persist to localStorage ──
   useEffect(() => {
@@ -1189,6 +1329,9 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
   useEffect(() => {
     try { localStorage.setItem('algotrade_watchlist', JSON.stringify(watchlist)); } catch(_) {}
   }, [watchlist]);
+  useEffect(() => {
+    try { localStorage.setItem('algotrade_timeframe', timeframe); } catch(_) {}
+  }, [timeframe]);
 
   const addLog = useCallback(msg => {
     const line = `${new Date().toLocaleTimeString()}  ${msg}`;
@@ -1243,7 +1386,8 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
     try {
       // bars
       const activeWatchlist = watchlistRef.current;
-      const newBars = await fetchBars(activeWatchlist, '5Min', isInit ? BARS_WARMUP : 6, apiKey, apiSecret);
+      const activeTF = timeframeRef.current;
+      const newBars = await fetchBars(activeWatchlist, activeTF, isInit ? BARS_WARMUP : 6, apiKey, apiSecret);
       if (isInit) {
         barsRef.current = newBars;
         addLog(`Loaded historical data for ${Object.keys(newBars).length} symbols`);
@@ -1287,6 +1431,16 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
   useEffect(() => {
     refresh(true).finally(() => setLoading(false));
   }, []);
+
+  // ── re-fetch when timeframe changes (after initial load) ──
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    barsRef.current = {};
+    setLoading(true);
+    refresh(true).finally(() => setLoading(false));
+    addLog(`Timeframe changed to ${timeframe} — reloading bars`);
+  }, [timeframe]);
 
   // ── polling interval ──
   useEffect(() => {
@@ -1343,6 +1497,17 @@ function Dashboard({ apiKey, apiSecret, initClock, onDisconnect }) {
             <span className={`status-text ${marketOpen ? 'status-open' : 'status-closed'}`}>
               {marketOpen ? 'Market Open' : 'Market Closed'}
             </span>
+          </div>
+          <div className="tf-row">
+            <span className="tf-label">TF</span>
+            {['1Min','5Min','15Min','1Hour'].map(tf => (
+              <button key={tf}
+                className={`tf-btn ${timeframe===tf?'active':''}`}
+                onClick={() => setTimeframe(tf)}
+                title={`Switch to ${tf} bars`}>
+                {tf.replace('Min','m').replace('Hour','h')}
+              </button>
+            ))}
           </div>
           <span className="update-time">
             {lastUpdate ? `↺ ${lastUpdate.toLocaleTimeString()}  ·  next ${countdown}s` : status}
